@@ -8,6 +8,9 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+
+// 👉 Indique à Express qu’il est derrière un proxy (Render, Heroku, etc.)
+app.set('trust proxy', true);
 // Configuration avancée CORS
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
