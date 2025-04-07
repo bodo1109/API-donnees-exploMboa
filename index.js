@@ -11,8 +11,10 @@ const app = express();
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type']
+  allowedHeaders: ['Content-Type'],
+  credentials: true, // Si tu utilises des cookies/session
 }));
+
 
 // Sécurité
 app.use(helmet());
@@ -102,6 +104,24 @@ app.get('/pois', async (req, res) => {
       res.status(500).json({ error: 'Erreur interne du serveur' });
     }
   });
+
+  app.post('/poi', async (req, res) => {
+    const { nom, ville, quartier, categorieId, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports } = req.body;
+    try {
+      const query = `
+        INSERT INTO point_interests 
+        (nom, ville, quartier, category_id, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      const params = [nom, ville, quartier, categorieId, description, latitude, longitude, siteWeb, email, JSON.stringify(contacts), JSON.stringify(services), JSON.stringify(adresses), JSON.stringify(transports)];
+      await pool.query(query, params);
+      res.status(201).json({ message: 'POI créé avec succès' });
+    } catch (err) {
+      console.error('Erreur lors de la création du POI:', err);
+      res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+  });
+  
   
 
 // Middleware pour gérer les routes inexistantes (404)
