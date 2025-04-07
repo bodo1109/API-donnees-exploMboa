@@ -142,3 +142,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ API en écoute sur http://localhost:${PORT}`);
 });
+app.get('/test', (req, res) => {
+  res.send('Route test OK');
+});
