@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const bodyParser = require('body-parser');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -15,6 +16,8 @@ app.use(cors({
   credentials: true, // Si tu utilises des cookies/session
 }));
 
+app.use(bodyParser.json()); // ← obligatoire pour parser les JSON
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // Sécurité
 app.use(helmet());
