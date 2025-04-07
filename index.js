@@ -109,19 +109,19 @@ app.get('/pois', async (req, res) => {
   });
 
   app.post('/poi', async (req, res) => {
-    const { nom, ville, quartier, categorieId, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports } = req.body;
+    const { name, ville, quartier, category_id, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports } = req.body;
     try {
       const query = `
       INSERT INTO point_interests 
-      (nom, ville, quartier, category_id, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports) 
+      (name, ville, quartier, category_id, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const params = [
-      nom,
+      name,
       ville,
       quartier,
-      categorieId,
+      category_id,
       description,
       latitude,
       longitude,
