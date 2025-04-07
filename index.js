@@ -112,37 +112,284 @@ app.get('/pois', async (req, res) => {
   });
 
   app.post('/poi', async (req, res) => {
-    const { name, adress, quartier_id, category_id, description, latitude, longitude, contacts, services, adresses, transports } = req.body;
+    const { name, adress, quartier_id, category_id, description, latitude, longitude, user_id } = req.body;
+    
     try {
-        const query = `
-            INSERT INTO point_interests 
-            (name, adress, quartier_id, category_id, description, latitude, longitude, contacts, services, adresses, transports) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        
-        const params = [
-            name,
-            adress,
-            quartier_id,
-            category_id,
-            description,
-            latitude,
-            longitude,
-            JSON.stringify(contacts),
-            JSON.stringify(services),
-            JSON.stringify(adresses),
-            JSON.stringify(transports)
-        ];
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
-        await pool.query(query, params);
-        res.status(201).json({ message: 'POI créé avec succès' });
+        try {
+            // 1. Insérer le POI principal
+            const [result] = await connection.query(
+                `INSERT INTO point_interests 
+                (name, adress, quartier_id, category_id, description, latitude, longitude, user_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [name, adress, quartier_id, category_id, description, latitude, longitude, user_id]
+            );
+
+            const poiId = result.insertId;
+
+            // 2. Insérer les contacts
+            if (req.body.contacts) {
+                await connection.query(
+                    `INSERT INTO contacts 
+                    (email, tel, whatsapp, url, pointinteret_id) 
+                    VALUES (?, ?, ?, ?, ?)`,
+                    [
+                        req.body.contacts.email || null,
+                        req.body.contacts.tel || null,
+                        req.body.contacts.whatsapp || null,
+                        req.body.contacts.url || null,
+                        poiId
+                    ]
+                );
+            }
+
+            // 3. Insérer les services
+            if (req.body.services && req.body.services.length > 0) {
+                for (const service of req.body.services) {
+                    await connection.query(
+                        `INSERT INTO services 
+                        (name, description, amount, pointinteret_id, langue) 
+                        VALUES (?, ?, ?, ?, 'fr')`,
+                        [
+                            service.name || 'Service sans nom',
+                            service.description || null,
+                            service.amount || 0,
+                            poiId
+                        ]
+                    );
+                }
+            }
+
+            // 4. Insérer les transports
+            if (req.body.transports && req.body.transports.length > 0) {
+                for (const transport of req.body.transports) {
+                    await connection.query(
+                        `INSERT INTO transports 
+                        (tarif_jour, tarif_nuit, secteur, quartier1_id, quartier2_id, pointinteret_id) 
+                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        [
+                            transport.tarif_jour || 0,
+                            transport.tarif_nuit || 0,
+                            transport.secteur || 'Non spécifié',
+                            transport.quartier1_id || null,
+                            transport.quartier2_id || null,
+                            poiId
+                        ]
+                    );
+                }
+            }
+
+            await connection.commit();
+            connection.release();
+
+            res.status(201).json({ 
+                message: 'POI créé avec succès',
+                poiId: poiId
+            });
+
+        } catch (err) {
+            await connection.rollback();
+            connection.release();
+            throw err;
+        }
+
     } catch (err) {
         console.error('Erreur lors de la création du POI:', err);
-        res.status(500).json({ error: 'Erreur interne du serveur' });
+        res.status(500).json({ 
+            error: 'Erreur interne du serveur',
+            details: err.message 
+        });
     }  
 });
 
+// Récupérer un POI spécifique
+app.get('/pois/:id', async (req, res) => {
+  try {
+      const [rows] = await pool.query('SELECT * FROM point_interests WHERE id = ?', [req.params.id]);
+      if (rows.length === 0) {
+          return res.status(404).json({ error: 'POI non trouvé' });
+      }
+      res.json(rows[0]);
+  } catch (err) {
+      console.error('Erreur lors de la récupération du POI:', err);
+      res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
+
+
+
+// Mettre à jour un POI
+app.put('/pois/:id', async (req, res) => {
+  const poiId = req.params.id;
+  const { 
+      name, 
+      adress, 
+      quartier_id, 
+      category_id, 
+      description, 
+      latitude, 
+      longitude, 
+      user_id,
+      contacts,
+      services,
+      transports
+  } = req.body;
+
+  try {
+      const connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      try {
+          // 1. Mettre à jour le POI principal
+          await connection.query(
+              `UPDATE point_interests SET
+              name = ?,
+              adress = ?,
+              quartier_id = ?,
+              category_id = ?,
+              description = ?,
+              latitude = ?,
+              longitude = ?,
+              user_id = ?,
+              updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`,
+              [name, adress, quartier_id, category_id, description, latitude, longitude, user_id, poiId]
+          );
+
+          // 2. Mettre à jour les contacts
+          if (contacts) {
+              // Solution plus robuste qui évite l'erreur
+              await connection.query(
+                  `DELETE FROM contacts WHERE pointinteret_id = ?`,
+                  [poiId]
+              );
+
+              if (contacts.email || contacts.tel || contacts.whatsapp || contacts.url) {
+                  await connection.query(
+                      `INSERT INTO contacts 
+                      (email, tel, whatsapp, url, pointinteret_id) 
+                      VALUES (?, ?, ?, ?, ?)`,
+                      [
+                          contacts.email || null,
+                          contacts.tel || null,
+                          contacts.whatsapp || null,
+                          contacts.url || null,
+                          poiId
+                      ]
+                  );
+              }
+          }
+
+          // 3. Mettre à jour les services
+          if (services) {
+              await connection.query(
+                  `DELETE FROM services WHERE pointinteret_id = ?`,
+                  [poiId]
+              );
+
+              for (const service of services) {
+                  if (service.name) {  // Vérification minimale
+                      await connection.query(
+                          `INSERT INTO services 
+                          (name, description, amount, pointinteret_id, langue) 
+                          VALUES (?, ?, ?, ?, 'fr')`,
+                          [
+                              service.name,
+                              service.description || null,
+                              service.amount || 0,
+                              poiId
+                          ]
+                      );
+                  }
+              }
+          }
+
+          // 4. Mettre à jour les transports
+          if (transports) {
+              await connection.query(
+                  `DELETE FROM transports WHERE pointinteret_id = ?`,
+                  [poiId]
+              );
+
+              for (const transport of transports) {
+                  if (transport.secteur) {  // Vérification minimale
+                      await connection.query(
+                          `INSERT INTO transports 
+                          (tarif_jour, tarif_nuit, secteur, quartier1_id, quartier2_id, pointinteret_id) 
+                          VALUES (?, ?, ?, ?, ?, ?)`,
+                          [
+                              transport.tarif_jour || 0,
+                              transport.tarif_nuit || 0,
+                              transport.secteur,
+                              transport.quartier1_id || null,
+                              transport.quartier2_id || null,
+                              poiId
+                          ]
+                      );
+                  }
+              }
+          }
+
+          await connection.commit();
+          connection.release();
+
+          res.json({ 
+              message: 'POI mis à jour avec succès',
+              poiId: poiId
+          });
+
+      } catch (err) {
+          await connection.rollback();
+          connection.release();
+          console.error('Erreur transaction:', err);
+          throw err;
+      }
+
+  } catch (err) {
+      console.error('Erreur mise à jour POI:', err);
+      res.status(500).json({ 
+          error: 'Erreur interne du serveur',
+          details: process.env.NODE_ENV === 'development' ? err.message : 'Détails cachés en production'
+      });
+  }
+});
+
+// Supprimer un POI
+app.delete('/pois/:id', async (req, res) => {
+  try {
+      const [result] = await pool.query('DELETE FROM point_interests WHERE id = ?', [req.params.id]);
+      if (result.affectedRows === 0) {
+          return res.status(404).json({ error: 'POI non trouvé' });
+      }
+      res.json({ message: 'POI supprimé avec succès' });
+  } catch (err) {
+      console.error('Erreur lors de la suppression du POI:', err);
+      res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
   
+app.get('/pois-with-details', async (req, res) => {
+  try {
+      const query = `
+          SELECT 
+              pi.*,
+              c.name AS category_name,
+              q.name AS quartier_name
+          FROM point_interests pi
+          LEFT JOIN categories c ON pi.category_id = c.id
+          LEFT JOIN quartiers q ON pi.quartier_id = q.id
+          WHERE pi.langue = 'fr'
+      `;
+      const [rows] = await pool.query(query);
+      res.json(rows);
+  } catch (err) {
+      console.error('Erreur:', err);
+      res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
+
   app.get('/test', (req, res) => {
     res.send('Route test OK');
   });
