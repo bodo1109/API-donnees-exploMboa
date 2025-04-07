@@ -112,12 +112,27 @@ app.get('/pois', async (req, res) => {
     const { nom, ville, quartier, categorieId, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports } = req.body;
     try {
       const query = `
-        INSERT INTO point_interests 
-        (nom, ville, quartier, category_id, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      const params = [nom, ville, quartier, categorieId, description, latitude, longitude, siteWeb, email, JSON.stringify(contacts), JSON.stringify(services), JSON.stringify(adresses), JSON.stringify(transports)];
-      await pool.query(query, params);
+      INSERT INTO point_interests 
+      (nom, ville, quartier, category_id, description, latitude, longitude, siteWeb, email, contacts, services, adresses, transports) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const params = [
+      nom,
+      ville,
+      quartier,
+      categorieId,
+      description,
+      latitude,
+      longitude,
+      siteWeb,
+      email,
+      JSON.stringify(contacts),
+      JSON.stringify(services),
+      JSON.stringify(adresses),
+      JSON.stringify(transports)
+    ];
+          await pool.query(query, params);
       res.status(201).json({ message: 'POI créé avec succès' });
     } catch (err) {
       console.error('Erreur lors de la création du POI:', err);
@@ -125,7 +140,9 @@ app.get('/pois', async (req, res) => {
     }
   });
   
-  
+  app.get('/test', (req, res) => {
+    res.send('Route test OK');
+  });
 
 // Middleware pour gérer les routes inexistantes (404)
 app.use((req, res, next) => {
@@ -141,7 +158,4 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ API en écoute sur http://localhost:${PORT}`);
-});
-app.get('/test', (req, res) => {
-  res.send('Route test OK');
 });
