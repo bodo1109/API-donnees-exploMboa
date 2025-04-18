@@ -112,6 +112,7 @@ app.get('/pois', async (req, res) => {
   });
 
   app.post('/poi', async (req, res) => {
+    // Paramètres attendus - notez 'quarter_id' et non 'quartier_id'
     const { name, adress, quartier_id, category_id, description, latitude, longitude, user_id } = req.body;
     
     try {
@@ -119,12 +120,31 @@ app.get('/pois', async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // 1. Insérer le POI principal
+            // 1. Insérer le POI principal - avec tous les champs requis
             const [result] = await connection.query(
                 `INSERT INTO point_interests 
-                (name, adress, quartier_id, category_id, description, latitude, longitude, user_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [name, adress, quartier_id, category_id, description, latitude, longitude, user_id]
+                (name, adress, quartier_id, category_id, description, latitude, longitude,
+                 user_id, etoile, status, is_booking, is_restaurant, is_transport,
+                 is_stadium, is_recommand, langue) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    name,
+                    adress,
+                    quartier_id, // Doit être un ID valide de la table quarters
+                    category_id,
+                    description,
+                    latitude,
+                    longitude,
+                    user_id,
+                    req.body.etoile || null,
+                    req.body.status || 1,
+                    req.body.is_booking || 0,
+                    req.body.is_restaurant || 0,
+                    req.body.is_transport || 0,
+                    req.body.is_stadium || 0,
+                    req.body.is_recommand || 0,
+                    req.body.langue || 'fr'
+                ]
             );
 
             const poiId = result.insertId;
@@ -151,31 +171,30 @@ app.get('/pois', async (req, res) => {
                     await connection.query(
                         `INSERT INTO services 
                         (name, description, amount, pointinteret_id, langue) 
-                        VALUES (?, ?, ?, ?, 'fr')`,
+                        VALUES (?, ?, ?, ?, ?)`,
                         [
                             service.name || 'Service sans nom',
                             service.description || null,
                             service.amount || 0,
-                            poiId
+                            poiId,
+                            service.langue || 'fr'
                         ]
                     );
                 }
             }
 
-            // 4. Insérer les transports
-            if (req.body.transports && req.body.transports.length > 0) {
-                for (const transport of req.body.transports) {
+            // 4. Insérer les prix (nouveau)
+            if (req.body.prices && req.body.prices.length > 0) {
+                for (const price of req.body.prices) {
                     await connection.query(
-                        `INSERT INTO transports 
-                        (tarif_jour, tarif_nuit, secteur, quartier1_id, quartier2_id, pointinteret_id) 
-                        VALUES (?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO prices 
+                        (price_name, amount, pointinteret_id, langue) 
+                        VALUES (?, ?, ?, ?)`,
                         [
-                            transport.tarif_jour || 0,
-                            transport.tarif_nuit || 0,
-                            transport.secteur || 'Non spécifié',
-                            transport.quartier1_id || null,
-                            transport.quartier2_id || null,
-                            poiId
+                            price.price_name || 'Tarif sans nom',
+                            price.amount || 0,
+                            poiId,
+                            price.langue || 'fr'
                         ]
                     );
                 }
@@ -201,8 +220,11 @@ app.get('/pois', async (req, res) => {
             error: 'Erreur interne du serveur',
             details: err.message 
         });
-    }  
+    }
 });
+
+
+
 
 // Récupérer un POI spécifique
 app.get('/pois/:id', async (req, res) => {
@@ -306,31 +328,38 @@ app.put('/pois/:id', async (req, res) => {
               }
           }
 
-          // 4. Mettre à jour les transports
-          if (transports) {
-              await connection.query(
-                  `DELETE FROM transports WHERE pointinteret_id = ?`,
-                  [poiId]
-              );
-
-              for (const transport of transports) {
-                  if (transport.secteur) {  // Vérification minimale
-                      await connection.query(
-                          `INSERT INTO transports 
-                          (tarif_jour, tarif_nuit, secteur, quartier1_id, quartier2_id, pointinteret_id) 
-                          VALUES (?, ?, ?, ?, ?, ?)`,
-                          [
-                              transport.tarif_jour || 0,
-                              transport.tarif_nuit || 0,
-                              transport.secteur,
-                              transport.quartier1_id || null,
-                              transport.quartier2_id || null,
-                              poiId
-                          ]
-                      );
-                  }
-              }
-          }
+          // 4. Mettre à jour les prix
+          if (req.body.prices && req.body.prices.length > 0) {
+            for (const price of req.body.prices) {
+                if (price.id) {
+                    await connection.query(
+                        `UPDATE prices SET
+                            price_name = ?,
+                            amount = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND pointinteret_id = ?`,
+                        [
+                            price.price_name,
+                            price.amount,
+                            price.id,
+                            poiId
+                        ]
+                    );
+                } else {
+                    await connection.query(
+                        `INSERT INTO prices 
+                        (price_name, amount, pointinteret_id, langue)
+                        VALUES (?, ?, ?, ?)`,
+                        [
+                            price.price_name,
+                            price.amount,
+                            poiId,
+                            price.langue || 'fr'
+                        ]
+                    );
+                }
+            }
+        }
 
           await connection.commit();
           connection.release();
