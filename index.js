@@ -419,6 +419,37 @@ app.get('/pois-with-details', async (req, res) => {
   }
 });
 
+
+
+//Articles
+app.get('/articles', async (req, res) => {
+    try {
+      const [rows] = await pool.query('SELECT * FROM articles WHERE langue = "fr"');
+      res.json(rows);
+    } catch (err) {
+      console.error('Erreur articles:', err);
+      res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+  });
+
+  //Détail d’un article
+  app.get('/articles/:id', async (req, res) => {
+    try {
+      const [rows] = await pool.query('SELECT * FROM articles WHERE id = ?', [req.params.id]);
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Article non trouvé' });
+      }
+      res.json(rows[0]);
+    } catch (err) {
+      console.error('Erreur article:', err);
+      res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+  });
+  
+
+
+
+
   app.get('/test', (req, res) => {
     res.send('Route test OK');
   });
