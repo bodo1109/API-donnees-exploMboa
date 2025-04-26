@@ -13,11 +13,12 @@ const app = express();
 app.set('trust proxy', true);
 // Configuration avancée CORS
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true, // Si tu utilises des cookies/session
-}));
+    origin: process.env.CORS_ORIGIN === '*' ? true : process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()),
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true
+  }));
+  
 
 app.use(bodyParser.json()); // ← obligatoire pour parser les JSON
 app.use(bodyParser.urlencoded({ extended: true }));
